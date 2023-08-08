@@ -1,5 +1,5 @@
 
-# P2 - Memory Management and Layering
+# Memory Management and Layering
 
 ## Description
 The data structure used to manage memory was one doubly linked list. Each node represents a block of memory that either contains memory or is a hole.

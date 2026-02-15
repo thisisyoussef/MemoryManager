@@ -1,62 +1,60 @@
+# MemoryManager — Custom Memory Allocator in C++
 
-# Memory Management and Layering
+A low-level memory allocator built from scratch using `sbrk()` system calls, a doubly-linked list of memory blocks, and configurable allocation strategies (best-fit and worst-fit). Includes hole coalescing, bitmap memory visualization, and Valgrind-verified leak-free operation.
 
-## Description
-The data structure used to manage memory was one doubly linked list. Each node represents a block of memory that either contains memory or is a hole.
+![C++](https://img.shields.io/badge/C++-00599C?logo=cplusplus&logoColor=white)
 
-### Functions
+## What This Is
 
-- **`MemoryManager::initialize(size_t sizeInWords)`**
-  - Ensures the requested size is less than 65535 then proceeds to instantiate the Memory Manager’s size in words.
-  - Releases the memory block acquired through previous initialization by iterating through the linked list.
-  - Uses `sbrk` to increase the end of accessible data space by the bytes needed.
+A userspace memory manager that replaces `malloc`/`free` with custom allocation logic. It manages a contiguous block of memory obtained via `sbrk()`, tracks allocated and free blocks using a doubly-linked list, and implements two allocation strategies for studying memory fragmentation behavior.
 
-- **`MemoryManager::shutdown()`**
-  - Uses `sbrk` to decrease the end of accessible data space by the bytes initialized.
-  - Iterates through the linked list and deletes all memory allocated within the nodes.
+## How It Works
 
-- **`MemoryManager::allocate(size_t sizeInBytes)`**
-  - Gets offset by converting the address using `bestFit` or `worstFit` function and updates length of hole to place memory in.
-  - Deletes the list dynamically allocated by `getList()` to avoid memory leaks.
-  - If space for memory exists, creates a new node in place of the selected hole.
+```mermaid
+graph LR
+    Init["initialize(size)<br/><i>sbrk() to get<br/>memory from OS</i>"] --> Pool["Memory Pool<br/><i>Doubly-linked list<br/>of blocks</i>"]
 
-- **`MemoryManager::free(void *address)`**
-  - Converts address to an offset.
-  - Iterates through the linked list and assigns holes to true if they are equal to the offset to free them for incoming memory.
-  - Iterates through the linked list a second time and combines any adjacent holes into one.
+    Pool --> Alloc["allocate(size)"]
+    Pool --> Free["free(pointer)"]
 
-- **`MemoryManager::dumpMemoryMap(char *filename)`**
-  - Writes the hole list to filename as text by casting the linked list to a list of integers.
-  - Deletes the list to leave no memory leaks.
+    Alloc --> BF["Best Fit<br/><i>Smallest sufficient<br/>hole</i>"]
+    Alloc --> WF["Worst Fit<br/><i>Largest hole</i>"]
 
-- **`MemoryManager::getList()`**
-  - Iterates through linked list and updates list.
-  - Places all holes into a vector. Stores every two values as the start and length of the hole.
+    Free --> Coal["Coalesce<br/><i>Merge adjacent<br/>free blocks</i>"]
 
-- **`MemoryManager::getBitmap()`**
-  - Utilizes bit shifting to return a bit stream of bits in an array representing whether the words are used or free.
-  - Uses linked list iteration and checks the `isHole` variable within each node.
+    Pool --> Bitmap["getBitmap()<br/><i>Bit-level memory<br/>status map</i>"]
+    Pool --> Dump["dumpMemoryMap()<br/><i>Write layout<br/>to file</i>"]
+```
 
-- **`bestFit(int sizeInWords, void *list)`**
-  - Casts Linked List to integer list, iterates and returns the offset by the best fit memory algorithm.
+## Technical Highlights
 
-- **`worstFit(int sizeInWords, void *list)`**
-  - Casts Linked List to integer list, iterates and returns the offset by the worst fit memory algorithm.
+- **sbrk() Memory Acquisition** — Requests raw memory from the OS using the `sbrk()` system call, managing it entirely in userspace with no reliance on the standard allocator.
+- **Best-Fit / Worst-Fit Strategies** — Two configurable allocation algorithms. Best-fit minimizes wasted space per allocation; worst-fit reduces fragmentation by keeping large holes available.
+- **Hole Coalescing** — When a block is freed, the allocator checks adjacent blocks and merges contiguous free blocks to prevent fragmentation buildup.
+- **Memory Alignment** — Handles proper alignment requirements so allocated blocks respect CPU word boundaries.
+- **Bitmap Visualization** — `getBitmap()` returns a bit-level representation of memory status (allocated vs. free), useful for debugging and understanding fragmentation patterns.
+- **Memory Map Dump** — `dumpMemoryMap()` writes the complete block list (addresses, sizes, status) to a file for analysis.
+- **Valgrind Verified** — Tested with Valgrind to confirm zero memory leaks and no invalid memory access.
 
-## Testing
-The `CommandLineTest.cpp` file was used to test base level functionality for the functions. In addition, it was run using valgrind to detect memory leaks.
+## Core API
 
-## Bugs
-Major bugs encountered had to do with memory leaks. This often occurred when lists generated by `getList()` weren’t deleted. It was eventually solved by utilizing the `delete[]` keyword on list.
+```cpp
+void  initialize(unsigned int size, bool bestFit);  // Get memory from OS
+void* allocate(unsigned int size);                   // Allocate a block
+void  free(void* pointer);                           // Free a block (+ coalesce)
+vector<bool> getBitmap();                            // Bit-level memory status
+vector<pair<void*, unsigned int>> getList();          // List of free holes
+void  dumpMemoryMap(string filename);                // Write layout to file
+```
 
-## Link
-[Project Demo](https://youtu.be/5EFC-DO7_CQ)
+## Building & Running
 
-## References/Citations
-- [RIT Lecture on Garbage Collection](https://www.cs.rit.edu/~ark/lectures/gc/03_00_00.html)
-- [IBM DeveloperWorks on Data Alignment](https://www.ibm.com/developerworks/library/pa-dalign/index.html)
-- [C++ Reference on Functional Programming](https://en.cppreference.com/w/cpp/utility/functional/function)
-- [Valgrind Memory Leak Detection](http://valgrind.org/)
+```bash
+make              # Build with g++
+./memmanager      # Run
+make valgrind     # Run with Valgrind leak checking
+```
 
-## Author
-Youssef Ahmed
+## What I Learned
+
+Building a memory allocator from scratch gives you an appreciation for what `malloc` does behind the scenes — and why fragmentation, alignment, and coalescing matter in systems programming. It's one of the best exercises for understanding how operating systems manage the resource that every program depends on.
